@@ -22,14 +22,13 @@ private:
         }
     }
 
-    void karatsuba(int *a, int *b, int *c, int n) {
+    static void karatsuba(const int *a, const int *b, int *c, int n) {
         if (n <= 64) {
             for (int i = 0; i < n; i++)
                 for (int j = 0; j < n; j++)
                     c[i + j] += a[i] * b[j];
         } else {
             int k = n / 2;
-            // динамическая память, чтобы не перегружать стек на больших числах
             int* l = new int[k];
             int* r = new int[k];
             int* t = new int[n]();
@@ -39,12 +38,12 @@ private:
                 r[i] = b[i] + b[k + i];
             }
 
-            karatsuba(l, r, t, k); // считает t
-            karatsuba(a, b, c, k); // считает p1
-            karatsuba(a + k, b + k, c + n, k); // считает p2
+            karatsuba(l, r, t, k);
+            karatsuba(a, b, c, k);
+            karatsuba(a + k, b + k, c + n, k);
 
-            int *t1 = t, *t2 = t + k;
-            int *s1 = c, *s2 = c + k, *s3 = c + 2 * k, *s4 = c + 3 * k;
+            const int *t1 = t; const int *t2 = t + k;
+            const int *s1 = c; const int *s2 = c + k; const int *s3 = c + 2 * k; const int *s4 = c + 3 * k;
 
             for (int i = 0; i < k; i++) {
                 int c1 = s2[i] + t1[i] - s1[i] - s3[i];
@@ -58,62 +57,13 @@ private:
             delete[] t;
         }
     }
+
 public:
-    BigInteger operator*(const BigInteger& other) const {
-        if (this -> isZero() || other.isZero()) return BigInteger(0);
-
-        size_t max_len = std::max(this->digits.size(), other.digits.size());
-
-        size_t n = 1;
-        while (n < max_len) n*=2; //округляем вверх до ближайшей степени двойки
-
-        // временые массивы нужной длины, забиты нулями
-        int* a_arr = new int[n]();
-        int* b_arr = new int[n]();
-        int* c_arr = new int[2 * n](); // результат мин в 2 раза длинее
-
-        // копируем из digits в массивы
-        for (size_t i = 0; i < this->digits.size(); ++i) a_arr[i] = this->digits[i];
-        for (size_t i = 0; i < other.digits.size(); ++i) b_arr[i] = other.digits[i];
-
-        // карацуба
-        karatsuba(a_arr, b_arr, c_arr, n);
-
-        // внутри алгоса были вычитания, там могут быть отриц и тд
-        BigInteger result;
-        result.digits.clear(); //очищаем
-
-        long long carry = 0;
-        for (size_t i = 0; i < 2 * n; ++i) {
-            long long cur = c_arr[i] + carry;
-            if (cur < 0) {
-                // если отриц занимаем у старшего разряда
-                long long borrow = (-cur + 9) / 10;
-                carry = -borrow;
-                cur += borrow * 10;
-            } else {
-                carry = cur / 10;
-                cur %= 10;
-            }
-            result.digits.push_back(cur);
-        }
-
-        // если после всего цикла остался перенос, то добавляем его в конец
-        while (carry > 0) {
-            result.digits.push_back(carry % 10);
-            carry /= 10;
-        }
-
-        // чистим дин память за собой
-        delete[] a_arr;
-        delete[] b_arr;
-        delete[] c_arr;
-
-        // убираем ведущие нули, если они образовались
-        result.remove_leading_zeros();
-
-        return result;
+    // проверка на ноль и преобразование в строку
+    bool isZero() const {
+        return digits.size() == 1 && digits[0] == 0;
     }
+
     // конструкторы
     BigInteger() {
         digits = {0};
@@ -144,11 +94,6 @@ public:
             }
         }
         remove_leading_zeros();
-    }
-
-    // проверка на ноль и преобразование в строку
-    bool isZero() const {
-        return digits.size() == 1 && digits[0] == 0;
     }
 
     std::string toString() const {
@@ -218,10 +163,55 @@ public:
         return res;
     }
 
+    BigInteger operator*(const BigInteger& other) const {
+        if (this->isZero() || other.isZero()) return BigInteger(0);
 
+        size_t max_len = std::max(this->digits.size(), other.digits.size());
+        size_t n = 1;
+        while (n < max_len) n *= 2;
+
+        int* a_arr = new int[n]();
+        int* b_arr = new int[n]();
+        int* c_arr = new int[2 * n]();
+
+        for (size_t i = 0; i < this->digits.size(); ++i) a_arr[i] = this->digits[i];
+        for (size_t i = 0; i < other.digits.size(); ++i) b_arr[i] = other.digits[i];
+
+        karatsuba(a_arr, b_arr, c_arr, n);
+
+        BigInteger result;
+        result.digits.clear();
+
+        long long carry = 0;
+        // по BASE
+        for (size_t i = 0; i < 2 * n; ++i) {
+            long long cur = c_arr[i] + carry;
+            if (cur < 0) {
+                long long borrow = (-cur + BASE - 1) / BASE;
+                carry = -borrow;
+                cur += borrow * BASE;
+            } else {
+                carry = cur / BASE;
+                cur %= BASE;
+            }
+            result.digits.push_back(cur);
+        }
+
+        while (carry > 0) {
+            result.digits.push_back(carry % BASE);
+            carry /= BASE;
+        }
+
+        delete[] a_arr;
+        delete[] b_arr;
+        delete[] c_arr;
+
+        result.remove_leading_zeros();
+        return result;
+    }
 
     // деление
-    std::pair<BigInteger, BigInteger> divmod(const BigInteger& A, const BigInteger& B) {
+    std::pair<BigInteger, BigInteger> divmod(const BigInteger& A, const BigInteger& B) const {
         if (B.isZero()) throw std::invalid_argument("Division by zero");
         if (A < B) return {BigInteger(0), A};
 
@@ -229,7 +219,6 @@ public:
         quotient.digits.resize(A.digits.size(), 0);
         BigInteger current = 0;
 
-        // деление столбиком
         for (int i = (int)A.digits.size() - 1; i >= 0; --i) {
             if (current.isZero()) {
                 current.digits[0] = A.digits[i];
@@ -238,7 +227,6 @@ public:
             }
             current.remove_leading_zeros();
 
-            // бин поиск цифры частного в диапазоне от 0 до base-1
             long long low = 0, high = BASE - 1, ans = 0;
             while (low <= high) {
                 long long mid = low + (high - low) / 2;
