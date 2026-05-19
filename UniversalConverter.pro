@@ -13,6 +13,10 @@ SOURCES += \
     mainwindow.cpp
 
 HEADERS += \
+    BaseFormatter.h \
+    BaseParser.h \
+    BigFraction.h \
+    BigInteger.h \
     mainwindow.h
 
 FORMS += \

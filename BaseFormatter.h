@@ -1,0 +1,4 @@
+#ifndef BASEFORMATTER_H
+#define BASEFORMATTER_H
+
+#endif // BASEFORMATTER_H
