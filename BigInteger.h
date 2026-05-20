@@ -1,8 +1,6 @@
 #ifndef BIGINTEGER_H
 #define BIGINTEGER_H
 
-#endif // BIGINTEGER_H
-
 #pragma once
 #include <iostream>
 #include <vector>
@@ -22,55 +20,85 @@ private:
         }
     }
 
-    static void karatsuba(const int *a, const int *b, int *c, int n) {
-        if (n <= 64) {
-            for (int i = 0; i < n; i++)
-                for (int j = 0; j < n; j++)
-                    c[i + j] += a[i] * b[j];
-        } else {
-            int k = n / 2;
-            int* l = new int[k];
-            int* r = new int[k];
-            int* t = new int[n]();
-
-            for (int i = 0; i < k; i++) {
-                l[i] = a[i] + a[k + i];
-                r[i] = b[i] + b[k + i];
-            }
-
-            karatsuba(l, r, t, k);
-            karatsuba(a, b, c, k);
-            karatsuba(a + k, b + k, c + n, k);
-
-            const int *t1 = t; const int *t2 = t + k;
-            const int *s1 = c; const int *s2 = c + k; const int *s3 = c + 2 * k; const int *s4 = c + 3 * k;
-
-            for (int i = 0; i < k; i++) {
-                int c1 = s2[i] + t1[i] - s1[i] - s3[i];
-                int c2 = s3[i] + t2[i] - s2[i] - s4[i];
-                c[k + i] = c1;
-                c[n + i] = c2;
-            }
-
-            delete[] l;
-            delete[] r;
-            delete[] t;
-        }
+    // Вспомогательный метод для Карацубы: сдвиг числа на k разрядов (умножение на BASE^k)
+    BigInteger shift_left(size_t k) const {
+        if (this->isZero()) return *this;
+        BigInteger res = *this;
+        res.digits.insert(res.digits.begin(), k, 0);
+        return res;
     }
 
 public:
-    // проверка на ноль и преобразование в строку
+    // Изолированный статический метод Карацубы, работающий на объектах BigInteger
+    static BigInteger karatsuba(const BigInteger& a, const BigInteger& b) {
+        if (a.isZero() || b.isZero()) return BigInteger(0);
+
+        size_t n = std::max(a.digits.size(), b.digits.size());
+
+        // Если числа маленькие (<= 64 разрядов), внутри Карацубы считаем столбиком
+        if (n <= 64) {
+            BigInteger result;
+            result.digits.resize(a.digits.size() + b.digits.size(), 0);
+
+            for (size_t i = 0; i < a.digits.size(); ++i) {
+                long long carry = 0;
+                for (size_t j = 0; j < b.digits.size() || carry > 0; ++j) {
+                    long long cur = result.digits[i + j] +
+                                    (long long)a.digits[i] * (j < b.digits.size() ? b.digits[j] : 0) +
+                                    carry;
+                    result.digits[i + j] = cur % BASE;
+                    carry = cur / BASE;
+                }
+            }
+            result.remove_leading_zeros();
+            return result;
+        }
+
+        size_t k = n / 2;
+
+        // Режем объекты BigInteger на половины через строки
+        std::string str_a = a.toString();
+        std::string str_b = b.toString();
+        size_t char_shift = k * 9;
+
+        BigInteger a_high = 0, a_low = 0;
+        if (str_a.length() > char_shift) {
+            a_high = BigInteger(str_a.substr(0, str_a.length() - char_shift));
+            a_low = BigInteger(str_a.substr(str_a.length() - char_shift));
+        } else {
+            a_low = a;
+        }
+
+        BigInteger b_high = 0, b_low = 0;
+        if (str_b.length() > char_shift) {
+            b_high = BigInteger(str_b.substr(0, str_b.length() - char_shift));
+            b_low = BigInteger(str_b.substr(str_b.length() - char_shift));
+        } else {
+            b_low = b;
+        }
+
+        // Рекурсивные вызовы Карацубы
+        BigInteger p1 = karatsuba(a_low, b_low);
+        BigInteger p2 = karatsuba(a_high, b_high);
+        BigInteger p3 = karatsuba(a_low + a_high, b_low + b_high);
+
+        BigInteger mid = p3 - p1 - p2;
+
+        return p2.shift_left(2 * k) + mid.shift_left(k) + p1;
+    }
+
+    // Проверка на ноль
     bool isZero() const {
         return digits.size() == 1 && digits[0] == 0;
     }
 
-    // конструкторы
+    // Конструкторы
     BigInteger() {
         digits = {0};
     }
 
     BigInteger(long long val) {
-        if (val < 0) val = 0; // по условию только неотриц
+        if (val < 0) val = 0;
         if (val == 0) {
             digits = {0};
         } else {
@@ -106,7 +134,7 @@ public:
         return s;
     }
 
-    // операторы сравнения
+    // Операторы сравнения
     bool operator<(const BigInteger& other) const {
         if (digits.size() != other.digits.size()) {
             return digits.size() < other.digits.size();
@@ -163,54 +191,29 @@ public:
         return res;
     }
 
+    // умножение
     BigInteger operator*(const BigInteger& other) const {
         if (this->isZero() || other.isZero()) return BigInteger(0);
 
-        size_t max_len = std::max(this->digits.size(), other.digits.size());
-        size_t n = 1;
-        while (n < max_len) n *= 2;
-
-        int* a_arr = new int[n]();
-        int* b_arr = new int[n]();
-        int* c_arr = new int[2 * n]();
-
-        for (size_t i = 0; i < this->digits.size(); ++i) a_arr[i] = this->digits[i];
-        for (size_t i = 0; i < other.digits.size(); ++i) b_arr[i] = other.digits[i];
-
-        karatsuba(a_arr, b_arr, c_arr, n);
-
         BigInteger result;
-        result.digits.clear();
+        result.digits.resize(digits.size() + other.digits.size(), 0);
 
-        long long carry = 0;
-        // по BASE
-        for (size_t i = 0; i < 2 * n; ++i) {
-            long long cur = c_arr[i] + carry;
-            if (cur < 0) {
-                long long borrow = (-cur + BASE - 1) / BASE;
-                carry = -borrow;
-                cur += borrow * BASE;
-            } else {
+        for (size_t i = 0; i < digits.size(); ++i) {
+            long long carry = 0;
+            for (size_t j = 0; j < other.digits.size() || carry > 0; ++j) {
+                long long cur = result.digits[i + j] +
+                                (long long)digits[i] * (j < other.digits.size() ? other.digits[j] : 0) +
+                                carry;
+                result.digits[i + j] = cur % BASE;
                 carry = cur / BASE;
-                cur %= BASE;
             }
-            result.digits.push_back(cur);
         }
-
-        while (carry > 0) {
-            result.digits.push_back(carry % BASE);
-            carry /= BASE;
-        }
-
-        delete[] a_arr;
-        delete[] b_arr;
-        delete[] c_arr;
 
         result.remove_leading_zeros();
         return result;
     }
 
-    // деление
+    // Деление
     std::pair<BigInteger, BigInteger> divmod(const BigInteger& A, const BigInteger& B) const {
         if (B.isZero()) throw std::invalid_argument("Division by zero");
         if (A < B) return {BigInteger(0), A};
@@ -247,11 +250,10 @@ public:
     BigInteger operator/(const BigInteger& other) const { return divmod(*this, other).first; }
     BigInteger operator%(const BigInteger& other) const { return divmod(*this, other).second; }
 
-    // деление на маленькое число
     BigInteger operator/(long long short_val) const { return *this / BigInteger(short_val); }
     BigInteger operator%(long long short_val) const { return *this % BigInteger(short_val); }
 
-    // сокращенные операторы присваивания
+    // Сокращенные операторы присваивания
     BigInteger& operator+=(const BigInteger& other) { return *this = *this + other; }
     BigInteger& operator-=(const BigInteger& other) { return *this = *this - other; }
     BigInteger& operator*=(const BigInteger& other) { return *this = *this * other; }
@@ -263,3 +265,5 @@ public:
         return out;
     }
 };
+
+#endif // BIGINTEGER_H

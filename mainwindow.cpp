@@ -66,14 +66,16 @@ void MainWindow::on_btnLoadFile_clicked()
     if (fileName.isEmpty()) return;
 
     QFile file(fileName);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&file);
-        if (!in.atEnd()) ui->pSpinBox->setValue(in.readLine().toInt());
-        if (!in.atEnd()) ui->qSpinBox->setValue(in.readLine().toInt());
-        if (!in.atEnd()) ui->inputLineEdit->setText(in.readLine());
-        file.close();
-        ui->outputLog->clear();
-    }
+
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) { }
+
+
+    QTextStream in(&file);
+    if (!in.atEnd()) ui->pSpinBox->setValue(in.readLine().toInt());
+    if (!in.atEnd()) ui->qSpinBox->setValue(in.readLine().toInt());
+    if (!in.atEnd()) ui->inputLineEdit->setText(in.readLine());
+    file.close();
+    ui->outputLog->clear();
 }
 
 void MainWindow::on_btnSaveFile_clicked()
