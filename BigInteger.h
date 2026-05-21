@@ -20,7 +20,6 @@ private:
         }
     }
 
-    // Вспомогательный метод для Карацубы: сдвиг числа на k разрядов (умножение на BASE^k)
     BigInteger shift_left(size_t k) const {
         if (this->isZero()) return *this;
         BigInteger res = *this;
@@ -29,13 +28,11 @@ private:
     }
 
 public:
-    // Изолированный статический метод Карацубы, работающий на объектах BigInteger
     static BigInteger karatsuba(const BigInteger& a, const BigInteger& b) {
         if (a.isZero() || b.isZero()) return BigInteger(0);
 
         size_t n = std::max(a.digits.size(), b.digits.size());
 
-        // Если числа маленькие (<= 64 разрядов), внутри Карацубы считаем столбиком
         if (n <= 64) {
             BigInteger result;
             result.digits.resize(a.digits.size() + b.digits.size(), 0);
@@ -56,46 +53,43 @@ public:
 
         size_t k = n / 2;
 
-        // Режем объекты BigInteger на половины через строки
-        std::string str_a = a.toString();
-        std::string str_b = b.toString();
-        size_t char_shift = k * 9;
+        BigInteger a_l, a_r, b_l, b_r;
 
-        BigInteger a_high = 0, a_low = 0;
-        if (str_a.length() > char_shift) {
-            a_high = BigInteger(str_a.substr(0, str_a.length() - char_shift));
-            a_low = BigInteger(str_a.substr(str_a.length() - char_shift));
+        if (a.digits.size() > k) {
+            a_l.digits.assign(a.digits.begin(), a.digits.begin() + k);
+            a_r.digits.assign(a.digits.begin() + k, a.digits.end());
         } else {
-            a_low = a;
+            a_l = a;
+            a_r = BigInteger(0);
         }
 
-        BigInteger b_high = 0, b_low = 0;
-        if (str_b.length() > char_shift) {
-            b_high = BigInteger(str_b.substr(0, str_b.length() - char_shift));
-            b_low = BigInteger(str_b.substr(str_b.length() - char_shift));
+        if (b.digits.size() > k) {
+            b_l.digits.assign(b.digits.begin(), b.digits.begin() + k);
+            b_r.digits.assign(b.digits.begin() + k, b.digits.end());
         } else {
-            b_low = b;
+            b_l = b;
+            b_r = BigInteger(0);
         }
 
-        // Рекурсивные вызовы Карацубы
-        BigInteger p1 = karatsuba(a_low, b_low);
-        BigInteger p2 = karatsuba(a_high, b_high);
-        BigInteger p3 = karatsuba(a_low + a_high, b_low + b_high);
+        a_l.remove_leading_zeros();
+        a_r.remove_leading_zeros();
+        b_l.remove_leading_zeros();
+        b_r.remove_leading_zeros();
+
+        BigInteger p1 = karatsuba(a_l, b_l);
+        BigInteger p2 = karatsuba(a_r, b_r);
+        BigInteger p3 = karatsuba(a_l + a_r, b_l + b_r);
 
         BigInteger mid = p3 - p1 - p2;
 
         return p2.shift_left(2 * k) + mid.shift_left(k) + p1;
     }
 
-    // Проверка на ноль
     bool isZero() const {
         return digits.size() == 1 && digits[0] == 0;
     }
 
-    // Конструкторы
-    BigInteger() {
-        digits = {0};
-    }
+    BigInteger() { digits = {0}; }
 
     BigInteger(long long val) {
         if (val < 0) val = 0;
@@ -134,29 +128,20 @@ public:
         return s;
     }
 
-    // Операторы сравнения
     bool operator<(const BigInteger& other) const {
-        if (digits.size() != other.digits.size()) {
-            return digits.size() < other.digits.size();
-        }
+        if (digits.size() != other.digits.size()) return digits.size() < other.digits.size();
         for (int i = (int)digits.size() - 1; i >= 0; --i) {
-            if (digits[i] != other.digits[i]) {
-                return digits[i] < other.digits[i];
-            }
+            if (digits[i] != other.digits[i]) return digits[i] < other.digits[i];
         }
         return false;
     }
 
-    bool operator==(const BigInteger& other) const {
-        return digits == other.digits;
-    }
-
+    bool operator==(const BigInteger& other) const { return digits == other.digits; }
     bool operator!=(const BigInteger& other) const { return !(*this == other); }
     bool operator>(const BigInteger& other) const { return other < *this; }
     bool operator<=(const BigInteger& other) const { return !(*this > other); }
     bool operator>=(const BigInteger& other) const { return !(*this < other); }
 
-    // Сложение и вычитание
     BigInteger operator+(const BigInteger& other) const {
         BigInteger res;
         res.digits.clear();
@@ -191,13 +176,17 @@ public:
         return res;
     }
 
-    // умножение
     BigInteger operator*(const BigInteger& other) const {
         if (this->isZero() || other.isZero()) return BigInteger(0);
 
+        // Включаем Карацубу только если ОБА числа длиннее 64 разрядов
+        if (this->digits.size() > 64 && other.digits.size() > 64) {
+            return BigInteger::karatsuba(*this, other);
+        }
+
+        // Если одно из чисел маленькое — быстро считаем обычным столбиком
         BigInteger result;
         result.digits.resize(digits.size() + other.digits.size(), 0);
-
         for (size_t i = 0; i < digits.size(); ++i) {
             long long carry = 0;
             for (size_t j = 0; j < other.digits.size() || carry > 0; ++j) {
@@ -208,12 +197,10 @@ public:
                 carry = cur / BASE;
             }
         }
-
         result.remove_leading_zeros();
         return result;
     }
 
-    // Деление
     std::pair<BigInteger, BigInteger> divmod(const BigInteger& A, const BigInteger& B) const {
         if (B.isZero()) throw std::invalid_argument("Division by zero");
         if (A < B) return {BigInteger(0), A};
@@ -249,11 +236,9 @@ public:
 
     BigInteger operator/(const BigInteger& other) const { return divmod(*this, other).first; }
     BigInteger operator%(const BigInteger& other) const { return divmod(*this, other).second; }
-
     BigInteger operator/(long long short_val) const { return *this / BigInteger(short_val); }
     BigInteger operator%(long long short_val) const { return *this % BigInteger(short_val); }
 
-    // Сокращенные операторы присваивания
     BigInteger& operator+=(const BigInteger& other) { return *this = *this + other; }
     BigInteger& operator-=(const BigInteger& other) { return *this = *this - other; }
     BigInteger& operator*=(const BigInteger& other) { return *this = *this * other; }
