@@ -55,6 +55,9 @@ private:
 public:
     static BigFraction parse(const std::string& input, int p) {
         if (input.empty()) throw std::invalid_argument("Пустая строка ввода");
+        if (!input.empty() && input[0] == '.') {
+            throw std::invalid_argument("Ошибка ввода: отсутствует целая часть перед точкой!");
+        }
 
         size_t dot_pos = input.find('.');
         size_t paren_pos = input.find('(');
@@ -62,6 +65,7 @@ public:
         std::string I_str = "";
         std::string F_str = "";
         std::string P_str = "";
+
 
         // рзделяем строку на составные компоненты
         if (dot_pos == std::string::npos) {
@@ -76,8 +80,13 @@ public:
                 F_str = input.substr(dot_pos + 1, paren_pos - (dot_pos + 1));
                 size_t close_paren = input.find(')', paren_pos);
                 if (close_paren == std::string::npos) throw std::invalid_argument("Пропущена закрывающая скобка периода");
+                if (close_paren-paren_pos == 1) throw std::invalid_argument("Пустой период");
                 P_str = input.substr(paren_pos + 1, close_paren - (paren_pos + 1));
             }
+        }
+
+        if (F_str.empty() && P_str.empty() && dot_pos != std::string::npos) {
+            throw std::invalid_argument("Ошибка ввода: после точки должна идти дробная часть или период!");
         }
 
         std::vector<int> I_digits = parseDigits(I_str, p);

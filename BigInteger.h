@@ -160,19 +160,17 @@ public:
     BigInteger operator-(const BigInteger& other) const {
         BigInteger res;
         res.digits.clear();
-        long long borrow = 0;
-        for (size_t i = 0; i < digits.size(); ++i) {
-            long long other_digit = (i < other.digits.size()) ? other.digits[i] : 0;
-            long long cur = digits[i] - other_digit - borrow;
-            if (cur < 0) {
+        long long carry = 0;
+        size_t n = other.digits.size();
+        for (size_t i = 0; i < n || carry > 0; ++i){
+            long long cur = 0 - carry;
+            cur += digits[i] - other.digits[i];
+            if (cur < 0){
+                carry = 1;
                 cur += BASE;
-                borrow = 1;
-            } else {
-                borrow = 0;
             }
-            res.digits.push_back(cur);
+            res.digits.push_back(cur%BASE);
         }
-        res.remove_leading_zeros();
         return res;
     }
 
